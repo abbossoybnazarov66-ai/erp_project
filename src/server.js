@@ -1,4 +1,5 @@
 import "dotenv/config"
+import fileUpload from "express-fileupload"
 
 import express from "express";
 import main from "./routers/index.js";
@@ -8,41 +9,31 @@ import path from "path"
 
 const app = express();
 app.use(express.json());
+app.use(fileUpload())
 
-// Barcha api'lar uchun umumiy prefix
+
 app.use("/", main);
 
 
 app.use((error, req, res, next) => {
-    if (error.status <= 500) {
+    const status = error.status || 500;
 
-        res.status(error.status).json({
-            status : error.status,
-            message : error.message
-        })
+    if (status < 500) {
+        return res.status(status).json({ status, message: error.message });
     }
-    else{
+
+    try {
         const logDir = path.join(process.cwd(), "src", "log");
         const logFilePath = path.join(logDir, "errors.txt");
-
-        if (!fs.existsSync(logDir)) {
-            fs.mkdirSync(logDir, { recursive: true });
-        }
-
-        const logMessage = `[${new Date().toLocaleDateString()}] - ${error.status} - ${error.message}\n-----------------------------------\n`
-
-       fs.appendFileSync(logFilePath, logMessage);
-
-
-       return res.status(error.status).json({
-            status: error.status,
-            message: error.message || "Internal Server Error"
-       })
+        const logMessage = `[${new Date().toLocaleString()}] -${req.method} -${req.url} - ${status} - ${error.message}\n${"-".repeat(40)}\n`;
+        fs.appendFileSync(logFilePath, logMessage);
+    } catch (e) {
+        console.error("log yozilmadi:", e.message);
     }
+    console.error(error);
 
-}
-
-)
+    return res.status(500).json({ status: 500, message: "Internal server error" });
+});
 
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => console.log(`server is running on PORT ${PORT}`));
